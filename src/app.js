@@ -562,5 +562,6 @@ $("saveBtn").onclick=()=>{persist();flash("Blueprint saved locally");};
 $("templateBtn").onclick=()=>{if(confirm("Replace current design with the starter robot?"))resetStarter();};
 $("sandbox").addEventListener("change",e=>{sandbox=e.target.checked;tool=null;drawPalette();});
 window.addEventListener("resize",resize);
+window.__botbattleDebug={state:()=>({mode,player,enemy,engine,blueprint,ended}),damagePart:(side,type,amount)=>{const actor=side==="player"?player:enemy;if(!actor)return null;const part=actor.parts.find(p=>p.type===type&&!p.dead);if(!part)return null;damage(part,amount,part.body.position,side==="player"?"enemy":"player",amount);return {id:part.id,hp:part.hp,dead:part.dead};},step:()=>simulate(1/60)};
 resize();persist();drawPalette();showInspector();requestAnimationFrame(frame);
 })();
