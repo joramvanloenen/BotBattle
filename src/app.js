@@ -217,7 +217,7 @@ function makeLink(a,b){
  const n=isPivot?1:2,link={a,b,constraints:[],hp:58,maxHp:58,active:true,pivot:isPivot};
  for(let i=0;i<n;i++){
   const side=i===0?-1:1,span=isPivot?0:13;
-  const world={x:mid.x+side*(-dy/len)*span,y:mid.y+side*(dx/len)*span};
+  const world=isPivot?{x:b.body.position.x,y:b.body.position.y}:{x:mid.x+side*(-dy/len)*span,y:mid.y+side*(dx/len)*span};
   const springy=b.type==="spring";
   const c=Constraint.create({bodyA:a.body,bodyB:b.body,pointA:localPoint(a.body,world),pointB:localPoint(b.body,world),length:0,stiffness:springy?.15:.9,damping:springy?.22:.15,render:{visible:false}});
   World.add(engine.world,c);link.constraints.push(c);
