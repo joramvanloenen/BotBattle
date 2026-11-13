@@ -42,6 +42,13 @@ test('the robot drives using wheel motors and fires real projectiles',async ({pa
  await page.goto('http://127.0.0.1:4173/',{waitUntil:'domcontentloaded'});
  await page.waitForFunction(()=>!!window.__botbattleDebug);
  await page.locator('[data-mode="test"]').click();
+ // Shoot while the gun is intact, before driving into the training ground.
+ // A late projectile count is not reliable: bullets can hit something and despawn.
+ await page.keyboard.down('j');
+ await page.waitForFunction(()=>window.__botbattleDebug.state().projectiles.length>0,{timeout:3000});
+ const count=await page.evaluate(()=>window.__botbattleDebug.state().projectiles.length);
+ await page.keyboard.up('j');
+ expect(count).toBeGreaterThan(0);
  // Let the chassis settle onto the ground before driving.
  await page.waitForTimeout(900);
  const start=await page.evaluate(()=>window.__botbattleDebug.state().player.core.body.position.x);
@@ -50,11 +57,6 @@ test('the robot drives using wheel motors and fires real projectiles',async ({pa
  await page.keyboard.up('d');
  const finish=await page.evaluate(()=>window.__botbattleDebug.state().player.core.body.position.x);
  expect(finish-start).toBeGreaterThan(2);
- await page.keyboard.down('j');
- await page.waitForTimeout(100);
- const count=await page.evaluate(()=>window.__botbattleDebug.state().projectiles.length);
- await page.keyboard.up('j');
- expect(count).toBeGreaterThan(0);
 });
 
 
