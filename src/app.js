@@ -209,7 +209,10 @@ function buildBody(p,actor){
  World.add(engine.world,b);
  return piece;
 }
-function localPoint(body,world){const dx=world.x-body.position.x,dy=world.y-body.position.y,c=Math.cos(-body.angle),s=Math.sin(-body.angle);return{x:dx*c-dy*s,y:dx*s+dy*c};}
+// Matter.js stores constraint anchor offsets in the body's *initial world axes*
+// and rotates them internally as the body turns. Do NOT pre-rotate the
+// offsets into the body's local frame: that double-rotates every edited part.
+function constraintOffset(body,world){return{x:world.x-body.position.x,y:world.y-body.position.y};}
 function makeLink(a,b){
  const mid={x:(a.body.position.x+b.body.position.x)/2,y:(a.body.position.y+b.body.position.y)/2};
  const dx=b.body.position.x-a.body.position.x,dy=b.body.position.y-a.body.position.y,len=Math.max(1,Math.hypot(dx,dy));
@@ -219,7 +222,7 @@ function makeLink(a,b){
   const side=i===0?-1:1,span=isPivot?0:13;
   const world=isPivot?{x:b.body.position.x,y:b.body.position.y}:{x:mid.x+side*(-dy/len)*span,y:mid.y+side*(dx/len)*span};
   const springy=b.type==="spring";
-  const c=Constraint.create({bodyA:a.body,bodyB:b.body,pointA:localPoint(a.body,world),pointB:localPoint(b.body,world),length:0,stiffness:springy?.15:.9,damping:springy?.22:.15,render:{visible:false}});
+  const c=Constraint.create({bodyA:a.body,bodyB:b.body,pointA:constraintOffset(a.body,world),pointB:constraintOffset(b.body,world),length:0,stiffness:springy?.15:.9,damping:springy?.22:.15,render:{visible:false}});
   World.add(engine.world,c);link.constraints.push(c);
  }
  return link;
