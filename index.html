@@ -1,0 +1,45 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<meta name="theme-color" content="#11151b"><title>BotBattle — build · test · destroy</title>
+<link rel="stylesheet" href="./style.css">
+<script defer src="https://cdn.jsdelivr.net/npm/matter-js@0.20.0/build/matter.min.js"></script>
+<script defer src="./src/app.js"></script>
+</head>
+<body>
+<div class="app">
+<header class="topbar">
+ <div class="brand"><div class="brandmark">B<span>•</span>B</div><div><strong>BOTBATTLE</strong><small>ENGINEERING COMBAT LAB</small></div></div>
+ <nav class="modes" aria-label="Game mode">
+  <button class="mode active" data-mode="build"><span>01</span> BUILD</button>
+  <button class="mode" data-mode="test"><span>02</span> TEST DRIVE</button>
+  <button class="mode battle" data-mode="battle"><span>03</span> BATTLE NPC</button>
+ </nav>
+ <div class="account"><div><small>SCRAP CREDITS</small><strong id="credits">0</strong></div><div><small>WINS</small><strong id="wins">0</strong></div><button id="shopBtn" class="outline">SHOP</button></div>
+</header>
+<main class="workspace">
+ <aside class="sidebar left">
+   <div class="panel-head"><span>COMPONENT LIBRARY</span><span class="count" id="partsCount">0 PARTS</span></div>
+   <div class="category" id="categories"></div>
+   <div id="parts" class="part-grid"></div>
+   <div class="panel-foot"><p>Select a part, then click the blueprint to place it. Click an existing part to inspect or drag it.</p><label class="toggle"><input id="sandbox" type="checkbox" checked><span>Sandbox: all parts available</span></label></div>
+ </aside>
+ <section class="viewport">
+   <div class="stage-top"><div class="crumb"><span class="dot"></span><span id="stageTitle">WORKSHOP / BLUEPRINT EDITOR</span></div><div class="stage-actions"><button id="undoBtn" title="Undo">↶ UNDO</button><button id="clearBtn">CLEAR</button><button id="saveBtn">SAVE BLUEPRINT</button></div></div>
+   <div class="canvas-wrap"><canvas id="game" aria-label="BotBattle workshop and 2D battle arena"></canvas><div class="hud" id="hud" hidden><div class="hud-sides"><div class="fighter player"><label>YOU / MK-I</label><div class="health-track"><i id="playerHP"></i></div><small id="playerStatus">100%</small></div><div class="vs">VS</div><div class="fighter enemy"><label>SCRAPJAW / NPC</label><div class="health-track"><i id="enemyHP"></i></div><small id="enemyStatus">100%</small></div></div></div><div class="message" id="message" hidden></div><div class="help" id="help">GRID 20 PX <span>·</span> WHEEL TO ZOOM <span>·</span> Q/E ROTATE <span>·</span> DEL REMOVE</div></div>
+   <div class="bottom-bar"><div class="status"><span class="live"></span><span id="status">WORKSHOP READY — SELECT A COMPONENT</span></div><div class="quick"><button id="templateBtn">LOAD STARTER BOT</button><button id="controlsBtn">CONTROLS <span>⌘</span></button></div></div>
+ </section>
+ <aside class="sidebar right">
+   <div class="panel-head"><span>COMPONENT INSPECTOR</span><span class="count">01 / DESIGN</span></div>
+   <div id="inspector" class="inspector"><div class="empty">Select any component in the workshop to inspect and configure it.</div></div>
+   <div class="assembly"><div class="panel-head"><span>ASSEMBLY ANALYSIS</span></div><div class="metric"><span>PARTS</span><b id="statParts">0</b></div><div class="metric"><span>TOTAL MASS</span><b id="statMass">0 kg</b></div><div class="metric"><span>ARMOR / HP</span><b id="statHP">0</b></div><div class="metric"><span>POWER DRAW</span><b id="statPower">0 W</b></div><div class="metric"><span>BUILD POINTS</span><b id="statCost">0</b></div><div id="buildWarning" class="warning">Core required.</div></div>
+   <div class="sidebar-bottom">Precision engineering is optional. Surviving your own design is not.</div>
+ </aside>
+</main>
+</div>
+<dialog id="settingsModal"><div class="modal-head"><h2>CONTROL MAPPING</h2><button class="close" data-close="settingsModal">✕</button></div><p>Assign actions to any key. Click a mapping and press the key you want. Mouse aiming and primary fire also work.</p><div id="mapping" class="mapping"></div><button class="primary wide" data-close="settingsModal">DONE</button></dialog>
+<dialog id="shopModal"><div class="modal-head"><h2>THE SCRAP SHOP</h2><button class="close" data-close="shopModal">✕</button></div><p>Earn credits by destroying the NPC robot. Purchases unlock components when Sandbox is off.</p><div id="shopItems" class="shop-items"></div><button class="primary wide" data-close="shopModal">BACK TO WORKSHOP</button></dialog>
+<div class="toast" id="toast" role="status" aria-live="polite"></div>
+</body>
+</html>
