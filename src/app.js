@@ -195,7 +195,7 @@ function setMode(next){
  const play=mode!=="build";$("hud").hidden=!play;$("message").hidden=true;$("stageTitle").textContent=mode==="build"?"WORKSHOP / BLUEPRINT EDITOR":mode==="test"?"TEST CHAMBER / LIVE PHYSICS":"SCRAP ARENA / LIVE NPC MATCH";
  $("help").innerHTML=play?"A / D DRIVE <span>·</span> MOUSE AIM <span>·</span> CLICK OR J FIRE <span>·</span> K SECONDARY <span>·</span> SPACE BOOST <span>·</span> ESC WORKSHOP":"GRID 20 PX <span>·</span> WHEEL TO ZOOM <span>·</span> Q/E ROTATE <span>·</span> DEL REMOVE";
  $("undoBtn").disabled=play;$("clearBtn").disabled=play;
- if(play){tool=null;selected=null;drawPalette();showInspector();startSimulation(next);}
+ if(play){tool=null;selected=null;pointer.moved=false;drawPalette();showInspector();startSimulation(next);}
  else {engine=null;actors=[];player=null;enemy=null;setStatus("WORKSHOP READY — SELECT A COMPONENT");}
 }
 function buildBody(p,actor){
@@ -214,7 +214,7 @@ function makeLink(a,b){
  const mid={x:(a.body.position.x+b.body.position.x)/2,y:(a.body.position.y+b.body.position.y)/2};
  const dx=b.body.position.x-a.body.position.x,dy=b.body.position.y-a.body.position.y,len=Math.max(1,Math.hypot(dx,dy));
  const isPivot=["wheel","servo","cannon","mg","rocket","laser","saw"].includes(b.type);
- const n=isPivot?1:2,link={a,b,constraints:[],hp:58,maxHp:58,active:true,pivot:isPivot};
+ const n=isPivot?1:2,link={a,b,constraints:[],hp:58,maxHp:58,active:true,pivot:isPivot,restAngle:b.body.angle-a.body.angle};
  for(let i=0;i<n;i++){
   const side=i===0?-1:1,span=isPivot?0:13;
   const world=isPivot?{x:b.body.position.x,y:b.body.position.y}:{x:mid.x+side*(-dy/len)*span,y:mid.y+side*(dx/len)*span};
@@ -348,18 +348,40 @@ function burst(at,n,color,speed){
  }
 }
 function spark(pos){effects.push({type:"spark",x:pos.x,y:pos.y,life:13,max:13});}
+// A pivot has a *local rest angle* from the workshop, not a world-space
+// angle of zero. Control the joint's angular velocity instead of teleporting
+// Body.setAngle each tick; this preserves the design rotation and physical motion.
+function drivePivot(part,link,desired){
+ const parentSpeed=link&&link.active?link.a.body.angularVelocity:0;
+ const delta=Math.atan2(Math.sin(desired-part.body.angle),Math.cos(desired-part.body.angle));
+ const relativeSpeed=part.body.angularVelocity-parentSpeed;
+ const correction=clamp(delta*.18-relativeSpeed*.2,-.20,.20);
+ Body.setAngularVelocity(part.body,parentSpeed+correction);
+}
 function aimAndShoot(actor,target,delta){
  for(const p of actor.parts){
   if(p.dead||!isPowered(p))continue;
   p.cd=Math.max(0,p.cd-delta);
   p.heat=Math.max(0,p.heat-delta*.3);
   if(gunTypes.includes(p.type)){
-   if(target){let a=Math.atan2(target.y-p.body.position.y,target.x-p.body.position.x);const old=p.body.angle;while(a-old>Math.PI)a-=TAU;while(a-old<-Math.PI)a+=TAU;Body.setAngle(p.body,lerp(old,a,.23));Body.setAngularVelocity(p.body,0);}
+   const mount=actor.links.find(l=>l.active&&l.b===p);
+   if(mount){
+    // Before the player actively aims, the barrel stays exactly at its
+    // workshop angle relative to the chassis (even if the chassis rotates).
+    const desired=target?Math.atan2(target.y-p.body.position.y,target.x-p.body.position.x):mount.a.body.angle+mount.restAngle;
+    drivePivot(p,mount,desired);
+   }
    const active=p.bind==="secondary"?actor.secondary:actor.fire;
    const cost=p.type==="rocket"?24:p.type==="laser"?11:p.type==="cannon"?9:2.5;
    if(active&&p.cd<=0&&actor.energy>=cost&&!ended){actor.energy-=cost;p.cd=getType(p.type).cd;if(p.type==="laser")laserFire(p);else spawnBullet(p);}
   }
-  if(p.type==="servo"&&actor.utility)Body.setAngularVelocity(p.body,clamp(p.body.angularVelocity+.07,-.25,.25));
+  if(p.type==="servo"){
+   const mount=actor.links.find(l=>l.active&&l.b===p);
+   if(mount){
+    if(actor.utility)mount.restAngle+=delta*1.8;
+    drivePivot(p,mount,mount.a.body.angle+mount.restAngle);
+   }
+  }
   if(p.type==="saw"&&actor.utility){
    Body.setAngularVelocity(p.body,.48);
    if(p.cd<=0){p.cd=.12;for(const foe of actors){if(foe===actor)continue;for(const other of foe.parts){if(other.dead)continue;const d=dist(p.body.position,other.body.position),radius=getType(other.type).r||Math.max(getType(other.type).w,getType(other.type).h)*.4;
@@ -394,7 +416,7 @@ function stepControl(actor,dt){
   Body.setAngularVelocity(p.body,lerp(p.body.angularVelocity,speed,.16));
  }
  const mouse=screenToWorld(pointer.x,pointer.y);
- const target=actor.ai?player.core.body.position:actor===player?(pointer.moved?mouse:{x:actor.core.body.position.x+450,y:actor.core.body.position.y-45}):null;
+ const target=actor.ai?player.core.body.position:actor===player&&pointer.moved?mouse:null;
  aimAndShoot(actor,target,dt);
 }
 function stepProjectiles(dt){
