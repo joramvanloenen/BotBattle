@@ -188,15 +188,30 @@ function drawMappings(){
  const root=$("mapping");root.innerHTML="";
  for(const a of actions){const row=document.createElement("div");row.className="map-row";const title=document.createElement("span");title.textContent=actionNames[a];const btn=document.createElement("button");btn.textContent=mappingListen===a?"PRESS KEY...":keys[a].replace(/^(Key|Digit)/,"");if(mappingListen===a)btn.classList.add("listening");btn.onclick=()=>{mappingListen=a;drawMappings();};row.append(title,btn);root.appendChild(row);}
 }
+function clearSimulation(){
+ // Every mode owns exactly one independent physics world and actor registry.
+ // Switching Test → Battle directly must not leave the previous bots in actors.
+ if(engine){
+  Events.off(engine,"collisionStart",collisionDamage);
+  World.clear(engine.world,false);
+  Engine.clear(engine);
+ }
+ engine=null;
+ actors=[];player=null;enemy=null;
+ projectiles=[];particles=[];effects=[];
+ elapsed=0;accumulator=0;ended=false;
+ matchStats={damage:0,kills:0};
+}
 function setMode(next){
  if(next!=="build"&&!blueprint.some(p=>p.type==="core")){flash("Build a control core first");return;}
- mode=next;ended=false;accumulator=0;projectiles=[];particles=[];effects=[];elapsed=0;
+ clearSimulation();
+ mode=next;
  document.querySelectorAll(".mode").forEach(b=>b.classList.toggle("active",b.dataset.mode===mode));
  const play=mode!=="build";$("hud").hidden=!play;$("message").hidden=true;$("stageTitle").textContent=mode==="build"?"WORKSHOP / BLUEPRINT EDITOR":mode==="test"?"TEST CHAMBER / LIVE PHYSICS":"SCRAP ARENA / LIVE NPC MATCH";
  $("help").innerHTML=play?"A / D DRIVE <span>·</span> MOUSE AIM <span>·</span> CLICK OR J FIRE <span>·</span> K SECONDARY <span>·</span> SPACE BOOST <span>·</span> ESC WORKSHOP":"GRID 20 PX <span>·</span> WHEEL TO ZOOM <span>·</span> Q/E ROTATE <span>·</span> DEL REMOVE";
  $("undoBtn").disabled=play;$("clearBtn").disabled=play;
  if(play){tool=null;selected=null;pointer.moved=false;drawPalette();showInspector();startSimulation(next);}
- else {engine=null;actors=[];player=null;enemy=null;setStatus("WORKSHOP READY — SELECT A COMPONENT");}
+ else {setStatus("WORKSHOP READY — SELECT A COMPONENT");}
 }
 function buildBody(p,actor){
  const t=getType(p.type),ang=actor.mirror?Math.PI-p.angle:p.angle;
@@ -252,6 +267,8 @@ function npcDesign(){
  ];
 }
 function startSimulation(kind){
+ // Defensive reset: never append the new match to the previous actor list.
+ actors=[];
  engine=Engine.create({positionIterations:10,velocityIterations:8,constraintIterations:7,enableSleeping:false});
  engine.gravity.y=1.25;
  const ground=Bodies.rectangle(WORLD_W/2,GROUND+70,WORLD_W+150,140,{isStatic:true,label:"floor",friction:1,render:{visible:false}});
@@ -567,10 +584,40 @@ function frame(t){
  else{accumulator+=dt;let steps=0;while(accumulator>=1/60&&steps<4){simulate(1/60);accumulator-=1/60;steps++;}drawBattle();}
  requestAnimationFrame(frame);
 }
+function shopPreview(type){
+ // Use the actual in-game component renderer so store previews exactly match
+ // the parts the player will receive, rather than generic placeholder icons.
+ const preview=document.createElement("canvas");
+ const w=112,h=72,scale=2;
+ preview.className="shop-preview";
+ preview.width=w*scale;preview.height=h*scale;
+ preview.setAttribute("role","img");
+ preview.setAttribute("aria-label",getType(type).name+" component preview");
+ const thumb=preview.getContext("2d");
+ thumb.setTransform(scale,0,0,scale,0,0);
+ thumb.fillStyle="#17232c";thumb.fillRect(0,0,w,h);
+ thumb.strokeStyle="#293f4a";thumb.lineWidth=.65;
+ for(let x=0;x<w;x+=16){thumb.beginPath();thumb.moveTo(x,0);thumb.lineTo(x,h);thumb.stroke();}
+ for(let y=0;y<h;y+=16){thumb.beginPath();thumb.moveTo(0,y);thumb.lineTo(w,y);thumb.stroke();}
+ thumb.strokeStyle="#365260";thumb.beginPath();
+ thumb.moveTo(w/2,0);thumb.lineTo(w/2,h);thumb.moveTo(0,h/2);thumb.lineTo(w,h/2);thumb.stroke();
+ const previous=ctx;
+ try{ctx=thumb;drawPart({type},w/2,h/2,0);}
+ finally{ctx=previous;}
+ return preview;
+}
 function drawShop(){
- const root=$("shopItems");root.innerHTML="";
+ const root=$("shopItems");root.replaceChildren();
  Object.entries(TYPES).filter(([id,t])=>t.price>0).forEach(([id,t])=>{
-  const own=unlocks.includes(id),row=document.createElement("div");row.className="shop-row";const info=document.createElement("div");info.innerHTML="<strong>"+t.name+"</strong><small>"+t.desc+"</small>";
+  const own=unlocks.includes(id),row=document.createElement("div");
+  row.className="shop-row";
+  row.appendChild(shopPreview(id));
+  const info=document.createElement("div");info.className="shop-info";
+  const name=document.createElement("strong");name.textContent=t.name;
+  const desc=document.createElement("small");desc.textContent=t.desc;
+  const stats=document.createElement("div");stats.className="shop-spec";
+  stats.textContent=t.hp+" HP  ·  "+t.cost+" BUILD POINTS";
+  info.append(name,desc,stats);
   const b=document.createElement("button");b.textContent=own?"OWNED":t.price+" SCRAP";b.disabled=own||credits<t.price;
   b.onclick=()=>{credits-=t.price;unlocks.push(id);persist();drawShop();drawPalette();flash("Unlocked "+t.name);};
   row.append(info,b);root.append(row);
@@ -587,6 +634,6 @@ $("saveBtn").onclick=()=>{persist();flash("Blueprint saved locally");};
 $("templateBtn").onclick=()=>{if(confirm("Replace current design with the starter robot?"))resetStarter();};
 $("sandbox").addEventListener("change",e=>{sandbox=e.target.checked;tool=null;drawPalette();});
 window.addEventListener("resize",resize);
-window.__botbattleDebug={state:()=>({mode,player,enemy,engine,blueprint,ended,projectiles}),damagePart:(side,type,amount)=>{const actor=side==="player"?player:enemy;if(!actor)return null;const part=actor.parts.find(p=>p.type===type&&!p.dead);if(!part)return null;damage(part,amount,part.body.position,side==="player"?"enemy":"player",amount);return {id:part.id,hp:part.hp,dead:part.dead};},step:()=>simulate(1/60)};
+window.__botbattleDebug={state:()=>({mode,player,enemy,engine,blueprint,ended,projectiles,actors}),damagePart:(side,type,amount)=>{const actor=side==="player"?player:enemy;if(!actor)return null;const part=actor.parts.find(p=>p.type===type&&!p.dead);if(!part)return null;damage(part,amount,part.body.position,side==="player"?"enemy":"player",amount);return {id:part.id,hp:part.hp,dead:part.dead};},step:()=>simulate(1/60)};
 resize();persist();drawPalette();showInspector();requestAnimationFrame(frame);
 })();
