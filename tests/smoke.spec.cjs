@@ -101,3 +101,69 @@ test('build rotations carry through rigid joints and pivot mounts in both play m
   }
  }
 });
+
+
+test('mode switches never duplicate actors or preserve an old physics world',async ({page})=>{
+ const errors=[];page.on('pageerror',e=>errors.push(e.message));
+ await page.goto('http://127.0.0.1:4173/',{waitUntil:'domcontentloaded'});
+ await page.waitForFunction(()=>!!window.__botbattleDebug);
+ // Repeated direct transitions were previously appending four actors per round.
+ for(const mode of ['test','battle','test','battle','build','test','battle']){
+  await page.locator('[data-mode="'+mode+'"]').click();
+  const snapshot=await page.evaluate(()=>{
+   const {mode,actors,engine,player,enemy}=window.__botbattleDebug.state();
+   return {
+    mode,
+    actorCount:actors.length,
+    players:actors.filter(a=>a.team==='player').length,
+    enemies:actors.filter(a=>a.team==='enemy').length,
+    bodyCount:engine?engine.world.bodies.length:0,
+    actorBodyCount:actors.reduce((n,a)=>n+a.parts.length,0),
+    uniqueBodies:engine?new Set(engine.world.bodies).size:0,
+    activePlayer:player?actors.includes(player):false,
+    activeEnemy:enemy?actors.includes(enemy):false
+   };
+  });
+  expect(snapshot.mode).toBe(mode);
+  if(mode==='build'){
+   expect(snapshot.actorCount).toBe(0);
+   expect(snapshot.bodyCount).toBe(0);
+  }else{
+   expect(snapshot.actorCount).toBe(2);
+   expect(snapshot.players).toBe(1);
+   expect(snapshot.enemies).toBe(1);
+   expect(snapshot.activePlayer).toBe(true);
+   expect(snapshot.activeEnemy).toBe(true);
+   expect(snapshot.bodyCount).toBe(snapshot.actorBodyCount+3);
+   expect(snapshot.uniqueBodies).toBe(snapshot.bodyCount);
+  }
+ }
+ expect(errors).toEqual([]);
+});
+
+test('shop shows canvas-rendered previews of every purchasable part',async ({page})=>{
+ const errors=[];page.on('pageerror',e=>errors.push(e.message));
+ await page.goto('http://127.0.0.1:4173/',{waitUntil:'domcontentloaded'});
+ await page.waitForFunction(()=>!!window.__botbattleDebug);
+ await page.locator('#shopBtn').click();
+ await expect(page.locator('#shopModal')).toBeVisible();
+ const rows=page.locator('#shopItems .shop-row');
+ await expect(rows).toHaveCount(5);
+ await expect(page.locator('#shopItems .shop-preview')).toHaveCount(5);
+ const previews=await page.locator('#shopItems .shop-preview').evaluateAll(canvases=>canvases.map(c=>({
+  label:c.getAttribute('aria-label'),
+  width:c.width,
+  height:c.height,
+  png:c.toDataURL('image/png')
+ })));
+ expect(new Set(previews.map(x=>x.png)).size).toBe(5);
+ for(const preview of previews){
+  expect(preview.label).toMatch(/component preview/);
+  expect(preview.width).toBeGreaterThan(100);
+  expect(preview.height).toBeGreaterThan(70);
+  expect(preview.png.length).toBeGreaterThan(700);
+ }
+ await expect(rows.first().locator('.shop-spec')).toContainText('HP');
+ await expect(rows.first().locator('.shop-spec')).toContainText('BUILD POINTS');
+ expect(errors).toEqual([]);
+});
