@@ -56,3 +56,46 @@ test('the robot drives using wheel motors and fires real projectiles',async ({pa
  await page.keyboard.up('j');
  expect(count).toBeGreaterThan(0);
 });
+
+
+test('build rotations carry through rigid joints and pivot mounts in both play modes',async ({page})=>{
+ await page.goto('http://127.0.0.1:4173/',{waitUntil:'domcontentloaded'});
+ await page.waitForFunction(()=>!!window.__botbattleDebug);
+ // Deliberately include 90°, negative 45°, and 60° rotations on
+ // both rigid components and moving weapon/servo mounts.
+ await page.evaluate(()=>{
+  const design=window.__botbattleDebug.state().blueprint;
+  design.splice(0,design.length,
+   {id:1,type:'core',x:0,y:0,angle:0},
+   {id:2,type:'beam',x:-70,y:0,angle:-Math.PI/4},
+   {id:3,type:'armor',x:-125,y:0,angle:Math.PI/2},
+   {id:4,type:'cannon',x:70,y:0,angle:Math.PI/3,bind:'primary'},
+   {id:5,type:'servo',x:0,y:-70,angle:-Math.PI/3,bind:'utility'},
+   {id:6,type:'thruster',x:0,y:70,angle:Math.PI/2,bind:'boost'});
+ });
+ const expected={beam:-Math.PI/4,armor:Math.PI/2,cannon:Math.PI/3,servo:-Math.PI/3,thruster:Math.PI/2};
+ const measure=()=>page.evaluate(()=>{
+  const {player}=window.__botbattleDebug.state();
+  return Object.fromEntries(player.parts.filter(p=>p.type!=='core').map(p=>[
+   p.type,Math.atan2(Math.sin(p.body.angle-player.core.body.angle),Math.cos(p.body.angle-player.core.body.angle))
+  ]));
+ });
+ for(const mode of ['test','battle']){
+  await page.locator('[data-mode="'+mode+'"]').click();
+  const initial=await measure();
+  for(const type of Object.keys(expected)){
+   expect(Math.abs(Math.atan2(Math.sin(initial[type]-expected[type]),Math.cos(initial[type]-expected[type]))),
+    mode+' / '+type+' should spawn with editor angle').toBeLessThan(.045);
+  }
+  // Give the engine time to settle its joints. The player has not aimed,
+  // so turret and servo must not lose their deliberate design rotation.
+  await page.evaluate(()=>{
+   for(let i=0;i<35;i++)window.__botbattleDebug.step();
+  });
+  const settled=await measure();
+  for(const type of Object.keys(expected)){
+   expect(Math.abs(Math.atan2(Math.sin(settled[type]-expected[type]),Math.cos(settled[type]-expected[type]))),
+    mode+' / '+type+' must retain its chassis-relative orientation').toBeLessThan(.42);
+  }
+ }
+});
